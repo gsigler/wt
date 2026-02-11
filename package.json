@@ -1,0 +1,11 @@
+{
+  "name": "wt",
+  "version": "1.0.0",
+  "description": "Git worktree CLI for bare repo workflows",
+  "bin": {
+    "wt": "./bin/wt.js"
+  },
+  "dependencies": {
+    "commander": "^12.1.0"
+  }
+}
