@@ -102,7 +102,7 @@ describe("pr", () => {
     assert.ok(errMsg.includes("999"));
   });
 
-  it("reuses existing branch if it exists locally", (t) => {
+  it("deletes stale local branch before creating worktree", (t) => {
     const pr = setup(t);
     gitModule.gitInBare.mock.mockImplementation((args) => {
       if (args.includes("rev-parse")) return "abc123";
@@ -112,10 +112,14 @@ describe("pr", () => {
     pr("123");
 
     const gitCalls = gitModule.gitInBare.mock.calls.map((c) => c.arguments[0]);
+    assert.ok(
+      gitCalls.includes("branch -D feature-from-pr"),
+      "should delete existing local branch"
+    );
     const addCall = gitCalls.find((c) => c.includes("worktree add"));
     assert.ok(addCall);
-    assert.ok(!addCall.includes("-b"), "should not create new branch");
-    assert.ok(addCall.includes("feature-from-pr"));
+    assert.ok(addCall.includes("-b feature-from-pr"));
+    assert.ok(addCall.includes("origin/feature-from-pr"));
   });
 
   it("runs post-create script in worktree dir", (t) => {
