@@ -64,6 +64,10 @@ describe("pr", () => {
     assert.ok(gitCalls[2].includes("worktree add"));
     assert.ok(gitCalls[2].includes(path.join(ROOT, "prs", "123")));
     assert.ok(gitCalls[2].includes("-b feature-from-pr"));
+    assert.ok(
+      gitCalls[2].includes("origin/feature-from-pr"),
+      "should base on the PR's remote branch, not defaultBase"
+    );
   });
 
   it("creates prs/ directory", (t) => {
