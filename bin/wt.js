@@ -5,6 +5,7 @@ const init = require("../lib/commands/init");
 const create = require("../lib/commands/create");
 const list = require("../lib/commands/list");
 const remove = require("../lib/commands/remove");
+const pr = require("../lib/commands/pr");
 
 program.name("wt").description("Git worktree CLI for bare repo workflows");
 
@@ -24,6 +25,11 @@ program
   .command("list")
   .description("List all worktrees")
   .action(list);
+
+program
+  .command("pr <number>")
+  .description("Create a worktree for a pull request")
+  .action(pr);
 
 program
   .command("remove <branch>")

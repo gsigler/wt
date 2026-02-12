@@ -14,11 +14,15 @@ npm link           # symlink `wt` globally for testing
 wt --help          # verify it works
 ```
 
-No test framework, linter, or build step exists. The CLI runs plain Node.js (no transpilation).
+Tests use Node's built-in test runner (`node:test`). No linter or build step exists. The CLI runs plain Node.js (no transpilation).
+
+```sh
+npm test           # run all tests
+```
 
 ## Architecture
 
-~320 lines total. Entry point is `bin/wt.js` which uses `commander` to route to four command handlers.
+Entry point is `bin/wt.js` which uses `commander` to route to five command handlers.
 
 **Shared modules:**
 - `lib/git.js` — two helpers: `git(args, opts)` for general git calls, `gitInBare(args, projectRoot)` for commands targeting the `.bare/` directory. Both use synchronous `execSync`.
@@ -26,7 +30,8 @@ No test framework, linter, or build step exists. The CLI runs plain Node.js (no 
 
 **Commands (`lib/commands/`):**
 - `init.js` — interactive setup: clones bare repo into `.bare/`, creates `.git` file pointing to it, detects default branch, writes `worktree.json`
-- `create.js` — fetches, creates worktree + branch from `<remote>/<base>`, sets upstream, copies files, runs post-create script
+- `create.js` — fetches, creates worktree + branch from `<remote>/<base>`, copies files, runs post-create script. Exports `setupWorktree()` for shared post-creation logic.
+- `pr.js` — creates a worktree for a PR under `prs/<number>/`, using `gh` CLI to resolve the branch name
 - `list.js` — thin wrapper around `git worktree list`
 - `remove.js` — removes worktree, optionally deletes branch (with interactive confirmation)
 

@@ -18,7 +18,10 @@ function setup(t, configOverrides = {}) {
   };
 
   t.mock.method(configModule, "loadConfig", () => ({ root: ROOT, config }));
-  t.mock.method(gitModule, "gitInBare", () => "");
+  t.mock.method(gitModule, "gitInBare", (args) => {
+    if (args.includes("rev-parse")) throw new Error("not found");
+    return "";
+  });
   t.mock.method(fs, "existsSync", () => false);
   t.mock.method(fs, "copyFileSync", () => {});
   t.mock.method(fs, "mkdirSync", () => {});
@@ -29,8 +32,18 @@ function setup(t, configOverrides = {}) {
     throw new Error(`exit(${code})`);
   });
 
+  // Require module BEFORE mocking readFileSync/writeFileSync
+  // (Node's require uses fs.readFileSync internally to load .js files)
   delete require.cache[require.resolve("../lib/commands/create")];
-  return require("../lib/commands/create");
+  const create = require("../lib/commands/create");
+
+  t.mock.method(fs, "readFileSync", (p) => {
+    if (String(p).endsWith(".git")) return "gitdir: /fake/gitdir";
+    return "";
+  });
+  t.mock.method(fs, "writeFileSync", () => {});
+
+  return create;
 }
 
 describe("create", () => {
@@ -40,11 +53,10 @@ describe("create", () => {
 
     const calls = gitModule.gitInBare.mock.calls.map((c) => c.arguments[0]);
     assert.equal(calls[0], "fetch origin");
-    assert.ok(calls[1].includes("worktree add"));
-    assert.ok(calls[1].includes(path.join(ROOT, "my-branch")));
-    assert.ok(calls[1].includes("-b my-branch"));
-    assert.ok(calls[1].includes("origin/main"));
-    assert.equal(calls[2], "branch --set-upstream-to=origin/main my-branch");
+    assert.ok(calls[2].includes("worktree add"));
+    assert.ok(calls[2].includes(path.join(ROOT, "my-branch")));
+    assert.ok(calls[2].includes("-b my-branch"));
+    assert.ok(calls[2].includes("origin/main"));
   });
 
   it("uses custom base branch from opts", (t) => {
@@ -52,11 +64,7 @@ describe("create", () => {
     create("my-branch", { base: "develop" });
 
     const calls = gitModule.gitInBare.mock.calls.map((c) => c.arguments[0]);
-    assert.ok(calls[1].includes("origin/develop"));
-    assert.equal(
-      calls[2],
-      "branch --set-upstream-to=origin/develop my-branch"
-    );
+    assert.ok(calls[2].includes("origin/develop"));
   });
 
   it("exits if branch directory already exists", (t) => {
@@ -76,9 +84,10 @@ describe("create", () => {
     create("my-branch", {});
 
     assert.equal(fs.copyFileSync.mock.callCount(), 2);
+    // Source is base worktree (main) since it exists
     assert.equal(
       fs.copyFileSync.mock.calls[0].arguments[0],
-      path.join(ROOT, ".env")
+      path.join(ROOT, "main", ".env")
     );
     assert.equal(
       fs.copyFileSync.mock.calls[0].arguments[1],
@@ -112,5 +121,23 @@ describe("create", () => {
     const create = setup(t);
     create("my-branch", {});
     assert.equal(childProcess.execSync.mock.callCount(), 0);
+  });
+
+  it("writes worktree config to disable bare mode", (t) => {
+    const create = setup(t);
+    create("my-branch", {});
+
+    const writeCalls = fs.writeFileSync.mock.calls;
+    const configCall = writeCalls.find((c) =>
+      String(c.arguments[0]).includes("config.worktree")
+    );
+    assert.ok(configCall, "should write config.worktree");
+    assert.ok(configCall.arguments[1].includes("bare = false"));
+    assert.ok(configCall.arguments[1].includes("autoSetupRemote = true"));
+  });
+
+  it("exports setupWorktree", (t) => {
+    const create = setup(t);
+    assert.equal(typeof create.setupWorktree, "function");
   });
 });

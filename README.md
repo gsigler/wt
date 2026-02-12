@@ -20,6 +20,9 @@ wt init
 # Create a worktree
 wt create feature-branch
 
+# Check out a pull request
+wt pr 123
+
 # List worktrees
 wt list
 
@@ -38,7 +41,9 @@ myproject/
 ├── worktree.json        # wt config
 ├── .env                 # Shared files copied into worktrees
 ├── feature-branch/      # Worktree
-└── another-branch/      # Another worktree
+├── another-branch/      # Another worktree
+└── prs/                 # PR review worktrees
+    └── 123/             # wt pr 123
 ```
 
 ## Commands
@@ -58,6 +63,17 @@ Creates a new worktree:
 5. Runs post-create script (e.g. `npm install`)
 
 `--base` defaults to the `defaultBase` in `worktree.json`.
+
+### `wt pr <number>`
+
+Creates a worktree for a pull request, organized under `prs/`:
+
+1. Uses `gh pr view` to get the PR's branch name
+2. Fetches from remote
+3. Creates worktree at `prs/<number>/`
+4. Copies configured files and runs post-create script
+
+Requires the [GitHub CLI](https://cli.github.com/) (`gh`) to be installed and authenticated.
 
 ### `wt list`
 
