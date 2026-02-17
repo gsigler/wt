@@ -23,7 +23,7 @@ function setup(t, configOverrides = {}) {
     return "";
   });
   t.mock.method(fs, "existsSync", () => false);
-  t.mock.method(fs, "copyFileSync", () => {});
+  t.mock.method(fs, "cpSync", () => {});
   t.mock.method(fs, "mkdirSync", () => {});
   t.mock.method(childProcess, "execSync", () => "");
   t.mock.method(console, "log", () => {});
@@ -83,14 +83,14 @@ describe("create", () => {
 
     create("my-branch", {});
 
-    assert.equal(fs.copyFileSync.mock.callCount(), 2);
+    assert.equal(fs.cpSync.mock.callCount(), 2);
     // Source is base worktree (main) since it exists
     assert.equal(
-      fs.copyFileSync.mock.calls[0].arguments[0],
+      fs.cpSync.mock.calls[0].arguments[0],
       path.join(ROOT, "main", ".env")
     );
     assert.equal(
-      fs.copyFileSync.mock.calls[0].arguments[1],
+      fs.cpSync.mock.calls[0].arguments[1],
       path.join(ROOT, "my-branch", ".env")
     );
   });
@@ -99,7 +99,7 @@ describe("create", () => {
     const create = setup(t, { copyFiles: [".env"] });
     // existsSync returns false for everything (default)
     create("my-branch", {});
-    assert.equal(fs.copyFileSync.mock.callCount(), 0);
+    assert.equal(fs.cpSync.mock.callCount(), 0);
   });
 
   it("runs post-create script in worktree dir", (t) => {

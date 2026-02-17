@@ -23,7 +23,7 @@ function setup(t, configOverrides = {}) {
     return "";
   });
   t.mock.method(fs, "existsSync", () => false);
-  t.mock.method(fs, "copyFileSync", () => {});
+  t.mock.method(fs, "cpSync", () => {});
   t.mock.method(fs, "mkdirSync", () => {});
   t.mock.method(childProcess, "execSync", (cmd) => {
     if (String(cmd).startsWith("gh pr view")) return "feature-from-pr\n";
@@ -145,9 +145,9 @@ describe("pr", () => {
 
     pr("123");
 
-    assert.equal(fs.copyFileSync.mock.callCount(), 1);
+    assert.equal(fs.cpSync.mock.callCount(), 1);
     assert.equal(
-      fs.copyFileSync.mock.calls[0].arguments[1],
+      fs.cpSync.mock.calls[0].arguments[1],
       path.join(ROOT, "prs", "123", ".env")
     );
   });
