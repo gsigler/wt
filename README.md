@@ -17,11 +17,14 @@ npm link
 mkdir myproject && cd myproject
 wt init
 
-# Create a worktree
+# Create a worktree (auto-cds into it with shell-init)
 wt create feature-branch
 
 # Check out a pull request
 wt pr 123
+
+# Jump to a worktree
+wt cd feature-branch
 
 # List worktrees
 wt list
@@ -75,6 +78,17 @@ Creates a worktree for a pull request, organized under `prs/`:
 
 Requires the [GitHub CLI](https://cli.github.com/) (`gh`) to be installed and authenticated.
 
+### `wt cd [name]`
+
+Jumps to a worktree directory. With no argument, goes to the project root. Resolves `name` using:
+
+1. Exact branch name (`wt cd feature-branch`)
+2. Directory basename (`wt cd 123` → `prs/123/`)
+3. Relative path (`wt cd prs/123`)
+4. Substring match on branch name (`wt cd feat` → `feature-branch`)
+
+Requires the shell wrapper — see [Shell Integration](#shell-integration) below.
+
 ### `wt list`
 
 Lists all worktrees.
@@ -82,6 +96,25 @@ Lists all worktrees.
 ### `wt remove <branch> [--force]`
 
 Removes the worktree and optionally deletes the branch. Use `--force` for dirty worktrees.
+
+### `wt shell-init`
+
+Outputs a shell function that wraps `wt` so that `wt cd`, `wt create`, and `wt pr` can change your shell's working directory. See [Shell Integration](#shell-integration).
+
+## Shell Integration
+
+Add this to your `~/.zshrc` or `~/.bashrc`:
+
+```sh
+eval "$(wt shell-init)"
+```
+
+This gives you:
+
+- **`wt cd <name>`** — changes directory to a worktree
+- **`wt create`** / **`wt pr`** — automatically cd into the new worktree after creation
+
+Without the shell wrapper, `wt cd` prints the path but can't change your shell's directory (a limitation of all child processes on Unix).
 
 ## Config
 
