@@ -6,6 +6,8 @@ const create = require("../lib/commands/create");
 const list = require("../lib/commands/list");
 const remove = require("../lib/commands/remove");
 const pr = require("../lib/commands/pr");
+const cd = require("../lib/commands/cd");
+const shellInit = require("../lib/commands/shell-init");
 
 program.name("wt").description("Git worktree CLI for bare repo workflows");
 
@@ -36,5 +38,15 @@ program
   .description("Remove a worktree and optionally delete the branch")
   .option("--force", "force removal even if worktree is dirty")
   .action(remove);
+
+program
+  .command("cd [name]")
+  .description("Print the path to a worktree (use with shell-init for cd)")
+  .action(cd);
+
+program
+  .command("shell-init")
+  .description("Output shell function for wt cd integration")
+  .action(shellInit);
 
 program.parse();

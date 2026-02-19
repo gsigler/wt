@@ -34,6 +34,8 @@ Entry point is `bin/wt.js` which uses `commander` to route to five command handl
 - `pr.js` — creates a worktree for a PR under `prs/<number>/`, using `gh` CLI to resolve the branch name
 - `list.js` — thin wrapper around `git worktree list`
 - `remove.js` — removes worktree, optionally deletes branch (with interactive confirmation)
+- `cd.js` — resolves a worktree name to an absolute path (exact branch, basename, relative path, or substring match)
+- `shell-init.js` — outputs a shell function wrapper so `wt cd` can change the parent shell's directory
 
 **Key pattern:** All user prompts use Node's `readline` module with a local `prompt(question, default)` helper defined in `init.js` and `remove.js`.
 
