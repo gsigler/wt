@@ -1,5 +1,12 @@
-function shellInit() {
-  const script = `wt() {
+package cmd
+
+import (
+	"fmt"
+
+	"github.com/spf13/cobra"
+)
+
+const shellFunction = `wt() {
   if [ "$1" = "cd" ]; then
     shift
     local dir
@@ -20,8 +27,14 @@ function shellInit() {
   else
     command wt "$@"
   fi
-}`;
-  console.log(script);
-}
+}`
 
-module.exports = shellInit;
+func ShellInitCmd(d *Deps) *cobra.Command {
+	return &cobra.Command{
+		Use:   "shell-init",
+		Short: "Output shell function for wt cd integration",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Fprintln(d.Stdout, shellFunction)
+		},
+	}
+}

@@ -4,40 +4,44 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-`wt` is a Node.js CLI for managing git worktrees in a bare repo setup. It wraps git commands to automate cloning, worktree creation, upstream tracking, file copying, and post-create scripts.
+`wt` is a Go CLI for managing git worktrees in a bare repo setup. It wraps git commands to automate cloning, worktree creation, upstream tracking, file copying, and post-create scripts.
 
 ## Development
 
 ```sh
-npm install        # install dependencies (just commander)
-npm link           # symlink `wt` globally for testing
-wt --help          # verify it works
+make build         # build the `wt` binary
+make test          # run all tests
+make install       # install to $GOPATH/bin
 ```
 
-Tests use Node's built-in test runner (`node:test`). No linter or build step exists. The CLI runs plain Node.js (no transpilation).
+Only dependency is `github.com/spf13/cobra` for CLI routing.
 
 ```sh
-npm test           # run all tests
+go test ./...      # run all tests
 ```
 
 ## Architecture
 
-Entry point is `bin/wt.js` which uses `commander` to route to five command handlers.
+Entry point is `main.go` which uses `cobra` to register seven subcommand handlers.
 
-**Shared modules:**
-- `lib/git.js` — two helpers: `git(args, opts)` for general git calls, `gitInBare(args, projectRoot)` for commands targeting the `.bare/` directory. Both use synchronous `execSync`.
-- `lib/config.js` — finds `worktree.json` by walking up from cwd, loads/writes it. `loadConfig()` returns `{ projectRoot, config }` or exits if not in a wt project.
+**Shared packages:**
+- `internal/git/git.go` — two helpers: `Git(args, opts)` for general git calls, `GitInBare(args, projectRoot)` for commands targeting the `.bare/` directory. Both use `os/exec`.
+- `internal/config/config.go` — finds `worktree.json` by walking up from cwd, loads/writes it. `LoadConfig()` returns `(root, *Config, error)`.
+- `internal/cmd/deps.go` — `Deps` struct with `GitRunner` interface, `ConfigLoader` interface, `Prompter` interface, and `io.Writer` fields for stdout/stderr. Enables dependency injection for testing.
 
-**Commands (`lib/commands/`):**
-- `init.js` — interactive setup: clones bare repo into `.bare/`, creates `.git` file pointing to it, detects default branch, writes `worktree.json`
-- `create.js` — fetches, creates worktree + branch from `<remote>/<base>`, copies files, runs post-create script. Exports `setupWorktree()` for shared post-creation logic.
-- `pr.js` — creates a worktree for a PR under `prs/<number>/`, using `gh` CLI to resolve the branch name
-- `list.js` — thin wrapper around `git worktree list`
-- `remove.js` — removes worktree, optionally deletes branch (with interactive confirmation)
-- `cd.js` — resolves a worktree name to an absolute path (exact branch, basename, relative path, or substring match)
-- `shell-init.js` — outputs a shell function wrapper so `wt cd` can change the parent shell's directory
+**Commands (`internal/cmd/`):**
+- `init.go` — interactive setup: clones bare repo into `.bare/`, creates `.git` file pointing to it, detects default branch, writes `worktree.json`
+- `create.go` — fetches, creates worktree + branch from `<remote>/<base>`, copies files, runs post-create script. Exports `SetupWorktree()` for shared post-creation logic.
+- `pr.go` — creates a worktree for a PR under `prs/<number>/`, using `gh` CLI to resolve the branch name
+- `list.go` — thin wrapper around `git worktree list`
+- `remove.go` — removes worktree, optionally deletes branch (with interactive confirmation)
+- `cd.go` — resolves a worktree name to an absolute path (exact branch, basename, relative path, or substring match)
+- `shellinit.go` — outputs a shell function wrapper so `wt cd` can change the parent shell's directory
 
-**Key pattern:** All user prompts use Node's `readline` module with a local `prompt(question, default)` helper defined in `init.js` and `remove.js`.
+**Key patterns:**
+- All commands use `Deps` for dependency injection — tests provide mock implementations.
+- Commands use Cobra's `RunE`, returning errors instead of calling `os.Exit`.
+- User prompts use `bufio.Scanner` via the `Prompter` interface.
 
 ## Config
 

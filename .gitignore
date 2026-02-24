@@ -1,26 +1,9 @@
-# Dependencies
-node_modules/
+# Binary
+/wt
+wt-*
 
-# Logs
-logs/
-*.log
-npm-debug.log*
-
-# Runtime data
-pids/
-*.pid
-*.seed
-*.pid.lock
-
-# Coverage
-coverage/
-*.lcov
-.nyc_output/
-
-# Build output
-dist/
-build/
-out/
+# Go
+vendor/
 
 # Environment variables
 .env
