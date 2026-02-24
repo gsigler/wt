@@ -46,11 +46,19 @@ func RemoveCmd(d *Deps) *cobra.Command {
 				removeArgs += " --force"
 			}
 			if _, err := d.Git.GitInBare(removeArgs, root); err != nil {
-				fmt.Fprintf(d.Stderr, "Failed to remove worktree: %s\n", err)
-				if !force {
-					fmt.Fprintln(d.Stderr, "Use --force to remove a dirty worktree.")
+				// If not already forcing and the error is about dirty files, prompt to force
+				if !force && strings.Contains(err.Error(), "modified or untracked") {
+					answer := d.Prompt.Prompt("Worktree has modified or untracked files. Force remove? (y/N)", "")
+					if strings.ToLower(strings.TrimSpace(answer)) == "y" {
+						if _, err := d.Git.GitInBare("worktree remove "+worktreePath+" --force", root); err != nil {
+							return fmt.Errorf("force removal failed: %w", err)
+						}
+					} else {
+						return fmt.Errorf("worktree removal cancelled")
+					}
+				} else {
+					return fmt.Errorf("failed to remove worktree: %w", err)
 				}
-				return fmt.Errorf("worktree removal failed")
 			}
 
 			// Ask whether to delete the branch

@@ -11,7 +11,7 @@ import (
 	"github.com/gradyholmes/wt/internal/config"
 )
 
-func setupRemoveTest(t *testing.T, answer string, gitInBareImpl func(string, string) (string, error)) (*Deps, *MockGit, *bytes.Buffer, *bytes.Buffer, string) {
+func setupRemoveTest(t *testing.T, answers []string, gitInBareImpl func(string, string) (string, error)) (*Deps, *MockGit, *bytes.Buffer, *bytes.Buffer, string) {
 	root := t.TempDir()
 
 	// Create fake worktree dir with .git pointer
@@ -27,14 +27,14 @@ func setupRemoveTest(t *testing.T, answer string, gitInBareImpl func(string, str
 		mg.GitInBareFunc = gitInBareImpl
 	}
 	mc := &MockConfig{Root: root, Cfg: &config.Config{}}
-	mp := &MockPrompter{Answers: []string{answer}}
+	mp := &MockPrompter{Answers: answers}
 	d, stdout, stderr := testDeps(mg, mc, mp)
 	return d, mg, stdout, stderr, root
 }
 
 func TestRemoveCmd(t *testing.T) {
 	t.Run("removes worktree and skips branch deletion when user declines", func(t *testing.T) {
-		d, mg, _, _, _ := setupRemoveTest(t, "n", nil)
+		d, mg, _, _, _ := setupRemoveTest(t, []string{"n"}, nil)
 
 		cmd := RemoveCmd(d)
 		cmd.SilenceUsage = true
@@ -52,7 +52,7 @@ func TestRemoveCmd(t *testing.T) {
 	})
 
 	t.Run("deletes branch when user confirms", func(t *testing.T) {
-		d, mg, _, _, _ := setupRemoveTest(t, "y", nil)
+		d, mg, _, _, _ := setupRemoveTest(t, []string{"y"}, nil)
 
 		cmd := RemoveCmd(d)
 		cmd.SilenceUsage = true
@@ -70,7 +70,7 @@ func TestRemoveCmd(t *testing.T) {
 	})
 
 	t.Run("passes --force flag to worktree remove", func(t *testing.T) {
-		d, mg, _, _, _ := setupRemoveTest(t, "n", nil)
+		d, mg, _, _, _ := setupRemoveTest(t, []string{"n"}, nil)
 
 		cmd := RemoveCmd(d)
 		cmd.SilenceUsage = true
@@ -84,9 +84,53 @@ func TestRemoveCmd(t *testing.T) {
 		}
 	})
 
-	t.Run("errors on worktree removal failure", func(t *testing.T) {
-		d, _, _, _, _ := setupRemoveTest(t, "n", func(args, root string) (string, error) {
-			return "", fmt.Errorf("dirty worktree")
+	t.Run("prompts to force when worktree is dirty", func(t *testing.T) {
+		callCount := 0
+		// First answer: "y" to force remove, second answer: "n" to skip branch delete
+		d, mg, _, _, _ := setupRemoveTest(t, []string{"y", "n"}, func(args, root string) (string, error) {
+			callCount++
+			if callCount == 1 {
+				return "", fmt.Errorf("modified or untracked files")
+			}
+			return "", nil
+		})
+
+		cmd := RemoveCmd(d)
+		cmd.SilenceUsage = true
+		cmd.SetArgs([]string{"my-branch"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatal(err)
+		}
+
+		if len(mg.Calls) != 2 {
+			t.Fatalf("expected 2 git calls, got %d: %v", len(mg.Calls), mg.Calls)
+		}
+		if !strings.Contains(mg.Calls[1], "--force") {
+			t.Errorf("retry call = %q, should contain --force", mg.Calls[1])
+		}
+	})
+
+	t.Run("cancels when user declines force remove", func(t *testing.T) {
+		d, _, _, _, _ := setupRemoveTest(t, []string{"n"}, func(args, root string) (string, error) {
+			return "", fmt.Errorf("modified or untracked files")
+		})
+
+		cmd := RemoveCmd(d)
+		cmd.SilenceErrors = true
+		cmd.SilenceUsage = true
+		cmd.SetArgs([]string{"my-branch"})
+		err := cmd.Execute()
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		if !strings.Contains(err.Error(), "cancelled") {
+			t.Errorf("error = %q, want cancelled", err)
+		}
+	})
+
+	t.Run("errors on non-dirty worktree failure", func(t *testing.T) {
+		d, _, _, _, _ := setupRemoveTest(t, []string{"n"}, func(args, root string) (string, error) {
+			return "", fmt.Errorf("not a working tree")
 		})
 
 		cmd := RemoveCmd(d)
@@ -99,25 +143,9 @@ func TestRemoveCmd(t *testing.T) {
 		}
 	})
 
-	t.Run("suggests --force on failure without force flag", func(t *testing.T) {
-		d, _, _, stderr, _ := setupRemoveTest(t, "n", func(args, root string) (string, error) {
-			return "", fmt.Errorf("dirty worktree")
-		})
-
-		cmd := RemoveCmd(d)
-		cmd.SilenceErrors = true
-		cmd.SilenceUsage = true
-		cmd.SetArgs([]string{"my-branch"})
-		cmd.Execute()
-
-		if !strings.Contains(stderr.String(), "--force") {
-			t.Errorf("stderr = %q, should suggest --force", stderr.String())
-		}
-	})
-
 	t.Run("handles branch deletion failure gracefully", func(t *testing.T) {
 		callCount := 0
-		d, _, _, stderr, _ := setupRemoveTest(t, "y", func(args, root string) (string, error) {
+		d, _, _, stderr, _ := setupRemoveTest(t, []string{"y"}, func(args, root string) (string, error) {
 			callCount++
 			if callCount == 2 {
 				return "", fmt.Errorf("not fully merged")

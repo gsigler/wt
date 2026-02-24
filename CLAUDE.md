@@ -22,7 +22,7 @@ go test ./...      # run all tests
 
 ## Architecture
 
-Entry point is `main.go` which uses `cobra` to register seven subcommand handlers.
+Entry point is `main.go` which uses `cobra` to register eight subcommand handlers.
 
 **Shared packages:**
 - `internal/git/git.go` — two helpers: `Git(args, opts)` for general git calls, `GitInBare(args, projectRoot)` for commands targeting the `.bare/` directory. Both use `os/exec`.
@@ -35,6 +35,7 @@ Entry point is `main.go` which uses `cobra` to register seven subcommand handler
 - `pr.go` — creates a worktree for a PR under `prs/<number>/`, using `gh` CLI to resolve the branch name
 - `list.go` — thin wrapper around `git worktree list`
 - `remove.go` — removes worktree, optionally deletes branch (with interactive confirmation)
+- `prune.go` — bulk-removes worktrees whose branches are merged into `<remote>/<defaultBase>`
 - `cd.go` — resolves a worktree name to an absolute path (exact branch, basename, relative path, or substring match)
 - `shellinit.go` — outputs a shell function wrapper so `wt cd` can change the parent shell's directory
 
@@ -42,6 +43,10 @@ Entry point is `main.go` which uses `cobra` to register seven subcommand handler
 - All commands use `Deps` for dependency injection — tests provide mock implementations.
 - Commands use Cobra's `RunE`, returning errors instead of calling `os.Exit`.
 - User prompts use `bufio.Scanner` via the `Prompter` interface.
+
+## Workflow
+
+When adding, removing, or changing commands, always update `README.md` to reflect the change.
 
 ## Config
 

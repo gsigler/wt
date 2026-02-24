@@ -22,6 +22,7 @@ func main() {
 	root.AddCommand(cmd.RemoveCmd(d))
 	root.AddCommand(cmd.CdCmd(d))
 	root.AddCommand(cmd.ShellInitCmd(d))
+	root.AddCommand(cmd.PruneCmd(d))
 
 	if err := root.Execute(); err != nil {
 		os.Exit(1)

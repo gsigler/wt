@@ -105,6 +105,14 @@ Lists all worktrees.
 
 Removes the worktree and optionally deletes the branch. Use `--force` for dirty worktrees.
 
+### `wt prune [--dry-run]`
+
+Bulk-removes worktrees whose branches are already merged into the default base branch. Fetches from remote, checks each worktree branch with `git merge-base --is-ancestor`, then prompts for confirmation before removing.
+
+- `--dry-run` — preview which worktrees would be removed without actually removing them
+- Skips the default base branch worktree (e.g. `main`)
+- Uses force removal and `branch -D` for each merged worktree
+
 ### `wt shell-init`
 
 Outputs a shell function that wraps `wt` so that `wt cd`, `wt create`, and `wt pr` can change your shell's working directory. See [Shell Integration](#shell-integration).
