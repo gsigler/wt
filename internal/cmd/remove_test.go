@@ -1,9 +1,7 @@
 package cmd
 
 import (
-	"bytes"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -11,30 +9,31 @@ import (
 	"github.com/gradyholmes/wt/internal/config"
 )
 
-func setupRemoveTest(t *testing.T, answers []string, gitInBareImpl func(string, string) (string, error)) (*Deps, *MockGit, *bytes.Buffer, *bytes.Buffer, string) {
-	root := t.TempDir()
-
-	// Create fake worktree dir with .git pointer
-	wtPath := filepath.Join(root, "my-branch")
-	os.MkdirAll(wtPath, 0755)
-	gitDir := filepath.Join(root, ".bare", "worktrees", "my-branch")
-	os.MkdirAll(gitDir, 0755)
-	os.WriteFile(filepath.Join(wtPath, ".git"), []byte("gitdir: "+gitDir), 0644)
-	os.WriteFile(filepath.Join(gitDir, "HEAD"), []byte("ref: refs/heads/my-branch\n"), 0644)
-
-	mg := &MockGit{}
-	if gitInBareImpl != nil {
-		mg.GitInBareFunc = gitInBareImpl
+func worktreeListOutput(root string, entries ...string) string {
+	// entries are like "my-branch abc1234 [my-branch]"
+	var lines []string
+	lines = append(lines, root+"/.bare           abc1234 (bare)")
+	for _, e := range entries {
+		lines = append(lines, e)
 	}
-	mc := &MockConfig{Root: root, Cfg: &config.Config{}}
-	mp := &MockPrompter{Answers: answers}
-	d, stdout, stderr := testDeps(mg, mc, mp)
-	return d, mg, stdout, stderr, root
+	return strings.Join(lines, "\n")
 }
 
 func TestRemoveCmd(t *testing.T) {
 	t.Run("removes worktree and skips branch deletion when user declines", func(t *testing.T) {
-		d, mg, _, _, _ := setupRemoveTest(t, []string{"n"}, nil)
+		root := t.TempDir()
+		wtPath := filepath.Join(root, "my-branch")
+		mg := &MockGit{
+			GitInBareFunc: func(args, projectRoot string) (string, error) {
+				if args == "worktree list" {
+					return worktreeListOutput(root, wtPath+" def5678 [my-branch]"), nil
+				}
+				return "", nil
+			},
+		}
+		mc := &MockConfig{Root: root, Cfg: &config.Config{}}
+		mp := &MockPrompter{Answers: []string{"n"}}
+		d, _, _ := testDeps(mg, mc, mp)
 
 		cmd := RemoveCmd(d)
 		cmd.SilenceUsage = true
@@ -43,16 +42,29 @@ func TestRemoveCmd(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if len(mg.Calls) != 1 {
-			t.Fatalf("expected 1 git call, got %d: %v", len(mg.Calls), mg.Calls)
+		// worktree list + worktree remove
+		if len(mg.Calls) != 2 {
+			t.Fatalf("expected 2 git calls, got %d: %v", len(mg.Calls), mg.Calls)
 		}
-		if !strings.Contains(mg.Calls[0], "worktree remove") {
-			t.Errorf("first call = %q", mg.Calls[0])
+		if !strings.Contains(mg.Calls[1], "worktree remove") {
+			t.Errorf("second call = %q, want worktree remove", mg.Calls[1])
 		}
 	})
 
 	t.Run("deletes branch when user confirms", func(t *testing.T) {
-		d, mg, _, _, _ := setupRemoveTest(t, []string{"y"}, nil)
+		root := t.TempDir()
+		wtPath := filepath.Join(root, "my-branch")
+		mg := &MockGit{
+			GitInBareFunc: func(args, projectRoot string) (string, error) {
+				if args == "worktree list" {
+					return worktreeListOutput(root, wtPath+" def5678 [my-branch]"), nil
+				}
+				return "", nil
+			},
+		}
+		mc := &MockConfig{Root: root, Cfg: &config.Config{}}
+		mp := &MockPrompter{Answers: []string{"y"}}
+		d, _, _ := testDeps(mg, mc, mp)
 
 		cmd := RemoveCmd(d)
 		cmd.SilenceUsage = true
@@ -61,16 +73,29 @@ func TestRemoveCmd(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if len(mg.Calls) != 2 {
-			t.Fatalf("expected 2 git calls, got %d: %v", len(mg.Calls), mg.Calls)
+		// worktree list + worktree remove + branch -d
+		if len(mg.Calls) != 3 {
+			t.Fatalf("expected 3 git calls, got %d: %v", len(mg.Calls), mg.Calls)
 		}
-		if mg.Calls[1] != "branch -d my-branch" {
-			t.Errorf("second call = %q, want 'branch -d my-branch'", mg.Calls[1])
+		if mg.Calls[2] != "branch -d my-branch" {
+			t.Errorf("third call = %q, want 'branch -d my-branch'", mg.Calls[2])
 		}
 	})
 
 	t.Run("passes --force flag to worktree remove", func(t *testing.T) {
-		d, mg, _, _, _ := setupRemoveTest(t, []string{"n"}, nil)
+		root := t.TempDir()
+		wtPath := filepath.Join(root, "my-branch")
+		mg := &MockGit{
+			GitInBareFunc: func(args, projectRoot string) (string, error) {
+				if args == "worktree list" {
+					return worktreeListOutput(root, wtPath+" def5678 [my-branch]"), nil
+				}
+				return "", nil
+			},
+		}
+		mc := &MockConfig{Root: root, Cfg: &config.Config{}}
+		mp := &MockPrompter{Answers: []string{"n"}}
+		d, _, _ := testDeps(mg, mc, mp)
 
 		cmd := RemoveCmd(d)
 		cmd.SilenceUsage = true
@@ -79,21 +104,33 @@ func TestRemoveCmd(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if !strings.Contains(mg.Calls[0], "--force") {
-			t.Errorf("call = %q, should contain --force", mg.Calls[0])
+		if !strings.Contains(mg.Calls[1], "--force") {
+			t.Errorf("call = %q, should contain --force", mg.Calls[1])
 		}
 	})
 
 	t.Run("prompts to force when worktree is dirty", func(t *testing.T) {
-		callCount := 0
+		root := t.TempDir()
+		wtPath := filepath.Join(root, "my-branch")
+		removeCallCount := 0
+		mg := &MockGit{
+			GitInBareFunc: func(args, projectRoot string) (string, error) {
+				if args == "worktree list" {
+					return worktreeListOutput(root, wtPath+" def5678 [my-branch]"), nil
+				}
+				if strings.HasPrefix(args, "worktree remove") {
+					removeCallCount++
+					if removeCallCount == 1 {
+						return "", fmt.Errorf("modified or untracked files")
+					}
+				}
+				return "", nil
+			},
+		}
+		mc := &MockConfig{Root: root, Cfg: &config.Config{}}
 		// First answer: "y" to force remove, second answer: "n" to skip branch delete
-		d, mg, _, _, _ := setupRemoveTest(t, []string{"y", "n"}, func(args, root string) (string, error) {
-			callCount++
-			if callCount == 1 {
-				return "", fmt.Errorf("modified or untracked files")
-			}
-			return "", nil
-		})
+		mp := &MockPrompter{Answers: []string{"y", "n"}}
+		d, _, _ := testDeps(mg, mc, mp)
 
 		cmd := RemoveCmd(d)
 		cmd.SilenceUsage = true
@@ -102,18 +139,32 @@ func TestRemoveCmd(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if len(mg.Calls) != 2 {
-			t.Fatalf("expected 2 git calls, got %d: %v", len(mg.Calls), mg.Calls)
+		// worktree list + worktree remove (fail) + worktree remove --force
+		if len(mg.Calls) != 3 {
+			t.Fatalf("expected 3 git calls, got %d: %v", len(mg.Calls), mg.Calls)
 		}
-		if !strings.Contains(mg.Calls[1], "--force") {
-			t.Errorf("retry call = %q, should contain --force", mg.Calls[1])
+		if !strings.Contains(mg.Calls[2], "--force") {
+			t.Errorf("retry call = %q, should contain --force", mg.Calls[2])
 		}
 	})
 
 	t.Run("cancels when user declines force remove", func(t *testing.T) {
-		d, _, _, _, _ := setupRemoveTest(t, []string{"n"}, func(args, root string) (string, error) {
-			return "", fmt.Errorf("modified or untracked files")
-		})
+		root := t.TempDir()
+		wtPath := filepath.Join(root, "my-branch")
+		mg := &MockGit{
+			GitInBareFunc: func(args, projectRoot string) (string, error) {
+				if args == "worktree list" {
+					return worktreeListOutput(root, wtPath+" def5678 [my-branch]"), nil
+				}
+				if strings.HasPrefix(args, "worktree remove") {
+					return "", fmt.Errorf("modified or untracked files")
+				}
+				return "", nil
+			},
+		}
+		mc := &MockConfig{Root: root, Cfg: &config.Config{}}
+		mp := &MockPrompter{Answers: []string{"n"}}
+		d, _, _ := testDeps(mg, mc, mp)
 
 		cmd := RemoveCmd(d)
 		cmd.SilenceErrors = true
@@ -129,9 +180,22 @@ func TestRemoveCmd(t *testing.T) {
 	})
 
 	t.Run("errors on non-dirty worktree failure", func(t *testing.T) {
-		d, _, _, _, _ := setupRemoveTest(t, []string{"n"}, func(args, root string) (string, error) {
-			return "", fmt.Errorf("not a working tree")
-		})
+		root := t.TempDir()
+		wtPath := filepath.Join(root, "my-branch")
+		mg := &MockGit{
+			GitInBareFunc: func(args, projectRoot string) (string, error) {
+				if args == "worktree list" {
+					return worktreeListOutput(root, wtPath+" def5678 [my-branch]"), nil
+				}
+				if strings.HasPrefix(args, "worktree remove") {
+					return "", fmt.Errorf("not a working tree")
+				}
+				return "", nil
+			},
+		}
+		mc := &MockConfig{Root: root, Cfg: &config.Config{}}
+		mp := &MockPrompter{Answers: []string{"n"}}
+		d, _, _ := testDeps(mg, mc, mp)
 
 		cmd := RemoveCmd(d)
 		cmd.SilenceErrors = true
@@ -144,14 +208,22 @@ func TestRemoveCmd(t *testing.T) {
 	})
 
 	t.Run("handles branch deletion failure gracefully", func(t *testing.T) {
-		callCount := 0
-		d, _, _, stderr, _ := setupRemoveTest(t, []string{"y"}, func(args, root string) (string, error) {
-			callCount++
-			if callCount == 2 {
-				return "", fmt.Errorf("not fully merged")
-			}
-			return "", nil
-		})
+		root := t.TempDir()
+		wtPath := filepath.Join(root, "my-branch")
+		mg := &MockGit{
+			GitInBareFunc: func(args, projectRoot string) (string, error) {
+				if args == "worktree list" {
+					return worktreeListOutput(root, wtPath+" def5678 [my-branch]"), nil
+				}
+				if strings.HasPrefix(args, "branch") {
+					return "", fmt.Errorf("not fully merged")
+				}
+				return "", nil
+			},
+		}
+		mc := &MockConfig{Root: root, Cfg: &config.Config{}}
+		mp := &MockPrompter{Answers: []string{"y"}}
+		d, _, stderr := testDeps(mg, mc, mp)
 
 		cmd := RemoveCmd(d)
 		cmd.SilenceUsage = true
@@ -167,32 +239,66 @@ func TestRemoveCmd(t *testing.T) {
 
 	t.Run("uses -D for PR worktrees", func(t *testing.T) {
 		root := t.TempDir()
-
-		// Create fake PR worktree
-		wtPath := filepath.Join(root, "prs", "123")
-		os.MkdirAll(wtPath, 0755)
-		gitDir := filepath.Join(root, ".bare", "worktrees", "123")
-		os.MkdirAll(gitDir, 0755)
-		os.WriteFile(filepath.Join(wtPath, ".git"), []byte("gitdir: "+gitDir), 0644)
-		os.WriteFile(filepath.Join(gitDir, "HEAD"), []byte("ref: refs/heads/fix-bug\n"), 0644)
-
-		mg := &MockGit{}
+		prPath := filepath.Join(root, "prs", "123")
+		mg := &MockGit{
+			GitInBareFunc: func(args, projectRoot string) (string, error) {
+				if args == "worktree list" {
+					return worktreeListOutput(root, prPath+" ghi9012 [fix-bug]"), nil
+				}
+				return "", nil
+			},
+		}
 		mc := &MockConfig{Root: root, Cfg: &config.Config{}}
 		mp := &MockPrompter{Answers: []string{"y"}}
 		d, _, _ := testDeps(mg, mc, mp)
 
 		cmd := RemoveCmd(d)
 		cmd.SilenceUsage = true
-		cmd.SetArgs([]string{"prs/123"})
+		cmd.SetArgs([]string{"fix-bug"})
 		if err := cmd.Execute(); err != nil {
 			t.Fatal(err)
 		}
 
-		if len(mg.Calls) != 2 {
-			t.Fatalf("expected 2 calls, got %d: %v", len(mg.Calls), mg.Calls)
+		// worktree list + worktree remove + branch -D
+		if len(mg.Calls) != 3 {
+			t.Fatalf("expected 3 calls, got %d: %v", len(mg.Calls), mg.Calls)
 		}
-		if mg.Calls[1] != "branch -D fix-bug" {
-			t.Errorf("branch delete call = %q, want 'branch -D fix-bug'", mg.Calls[1])
+		if mg.Calls[2] != "branch -D fix-bug" {
+			t.Errorf("branch delete call = %q, want 'branch -D fix-bug'", mg.Calls[2])
+		}
+	})
+
+	t.Run("resolves PR worktree by branch name", func(t *testing.T) {
+		root := t.TempDir()
+		prPath := filepath.Join(root, "prs", "2055")
+		mg := &MockGit{
+			GitInBareFunc: func(args, projectRoot string) (string, error) {
+				if args == "worktree list" {
+					return worktreeListOutput(root,
+						filepath.Join(root, "main")+" abc1234 [main]",
+						prPath+" def5678 [feat/se-1284-pt-1]",
+					), nil
+				}
+				return "", nil
+			},
+		}
+		mc := &MockConfig{Root: root, Cfg: &config.Config{}}
+		mp := &MockPrompter{Answers: []string{"n"}}
+		d, stdout, _ := testDeps(mg, mc, mp)
+
+		cmd := RemoveCmd(d)
+		cmd.SilenceUsage = true
+		cmd.SetArgs([]string{"feat/se-1284-pt-1"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatal(err)
+		}
+
+		// Should resolve correctly and remove the right path
+		if !strings.Contains(mg.Calls[1], prPath) {
+			t.Errorf("worktree remove call = %q, want path containing %s", mg.Calls[1], prPath)
+		}
+		if !strings.Contains(stdout.String(), "feat/se-1284-pt-1") {
+			t.Errorf("stdout = %q, should mention branch name", stdout.String())
 		}
 	})
 }

@@ -2,9 +2,7 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -13,34 +11,33 @@ import (
 func RemoveCmd(d *Deps) *cobra.Command {
 	var force bool
 	cmd := &cobra.Command{
-		Use:   "remove <branch>",
+		Use:   "remove <name>",
 		Short: "Remove a worktree and optionally delete the branch",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			branch := args[0]
+			name := args[0]
 
 			root, _, err := d.Config.LoadConfig()
 			if err != nil {
 				return err
 			}
-			worktreePath := filepath.Join(root, branch)
 
-			// Resolve the actual git branch name from the worktree before removing it
-			branchName := branch
-			dotGitContent, err := os.ReadFile(filepath.Join(worktreePath, ".git"))
-			if err == nil {
-				wtGitDir := strings.TrimSpace(strings.TrimPrefix(string(dotGitContent), "gitdir: "))
-				headContent, err := os.ReadFile(filepath.Join(wtGitDir, "HEAD"))
-				if err == nil {
-					re := regexp.MustCompile(`^ref: refs/heads/(.+)$`)
-					if m := re.FindStringSubmatch(strings.TrimSpace(string(headContent))); m != nil {
-						branchName = m[1]
-					}
-				}
+			// Resolve the worktree from the list (supports branch name, path, substring)
+			output, err := d.Git.GitInBare("worktree list", root)
+			if err != nil {
+				return err
+			}
+			entries := ParseWorktreeList(output)
+			entry, err := ResolveWorktree(name, root, entries)
+			if err != nil {
+				return err
 			}
 
+			worktreePath := entry.Dir
+			branchName := entry.Branch
+
 			// Remove worktree
-			fmt.Fprintf(d.Stdout, "Removing worktree %q...\n", branch)
+			fmt.Fprintf(d.Stdout, "Removing worktree %q...\n", branchName)
 			removeArgs := "worktree remove " + worktreePath
 			if force {
 				removeArgs += " --force"
@@ -67,7 +64,8 @@ func RemoveCmd(d *Deps) *cobra.Command {
 			if strings.ToLower(strings.TrimSpace(answer)) == "y" {
 				// Use -D (force) for PR worktrees since the branch will be recreated
 				// from remote by `wt pr`. Use -d (safe) for regular worktrees.
-				isPr := strings.HasPrefix(branch, "prs/") || strings.HasPrefix(branch, "prs\\")
+				rel, _ := filepath.Rel(root, worktreePath)
+				isPr := strings.HasPrefix(rel, "prs/") || strings.HasPrefix(rel, "prs"+string(filepath.Separator))
 				deleteFlag := "-d"
 				if isPr {
 					deleteFlag = "-D"

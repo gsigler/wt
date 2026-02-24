@@ -119,7 +119,7 @@ func TestCdCmd(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error")
 		}
-		if !strings.Contains(stderr.String(), `No worktree found matching "nonexistent"`) {
+		if !strings.Contains(stderr.String(), `no worktree found matching "nonexistent"`) {
 			t.Errorf("stderr = %q", stderr.String())
 		}
 	})
@@ -136,7 +136,7 @@ func TestCdCmd(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error")
 		}
-		if !strings.Contains(stderr.String(), `Multiple worktrees match "feat"`) {
+		if !strings.Contains(stderr.String(), `multiple worktrees match "feat"`) {
 			t.Errorf("stderr = %q", stderr.String())
 		}
 	})
@@ -153,7 +153,7 @@ func TestCdCmd(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error")
 		}
-		if !strings.Contains(stderr.String(), "No worktree found") {
+		if !strings.Contains(stderr.String(), "no worktree found") {
 			t.Errorf("stderr = %q", stderr.String())
 		}
 	})

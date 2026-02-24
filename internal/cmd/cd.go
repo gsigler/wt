@@ -39,6 +39,66 @@ func ParseWorktreeList(output string) []WorktreeEntry {
 	return entries
 }
 
+// ResolveWorktree finds a worktree matching name using the same cascade as `wt cd`:
+// exact branch, exact basename, exact relative path, then substring on branch.
+// Returns the matching entry or an error describing what went wrong.
+func ResolveWorktree(name string, root string, entries []WorktreeEntry) (*WorktreeEntry, error) {
+	// 1. Exact branch name match
+	var matches []WorktreeEntry
+	for _, e := range entries {
+		if e.Branch == name {
+			matches = append(matches, e)
+		}
+	}
+	if len(matches) == 1 {
+		return &matches[0], nil
+	}
+
+	// 2. Exact directory basename match
+	matches = nil
+	for _, e := range entries {
+		if filepath.Base(e.Dir) == name {
+			matches = append(matches, e)
+		}
+	}
+	if len(matches) == 1 {
+		return &matches[0], nil
+	}
+
+	// 3. Exact relative path match (relative to project root)
+	matches = nil
+	for _, e := range entries {
+		rel, err := filepath.Rel(root, e.Dir)
+		if err == nil && rel == name {
+			matches = append(matches, e)
+		}
+	}
+	if len(matches) == 1 {
+		return &matches[0], nil
+	}
+
+	// 4. Substring match on branch name
+	matches = nil
+	for _, e := range entries {
+		if strings.Contains(e.Branch, name) {
+			matches = append(matches, e)
+		}
+	}
+	if len(matches) == 1 {
+		return &matches[0], nil
+	}
+
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("no worktree found matching %q", name)
+	}
+
+	lines := fmt.Sprintf("multiple worktrees match %q:", name)
+	for _, m := range matches {
+		lines += fmt.Sprintf("\n  %s → %s", m.Branch, m.Dir)
+	}
+	return nil, fmt.Errorf("%s", lines)
+}
+
 func CdCmd(d *Deps) *cobra.Command {
 	return &cobra.Command{
 		Use:   "cd [name]",
@@ -55,72 +115,19 @@ func CdCmd(d *Deps) *cobra.Command {
 				return nil
 			}
 
-			name := args[0]
 			output, err := d.Git.GitInBare("worktree list", root)
 			if err != nil {
 				return err
 			}
 			entries := ParseWorktreeList(output)
 
-			// 1. Exact branch name match
-			var matches []WorktreeEntry
-			for _, e := range entries {
-				if e.Branch == name {
-					matches = append(matches, e)
-				}
+			entry, err := ResolveWorktree(args[0], root, entries)
+			if err != nil {
+				fmt.Fprintln(d.Stderr, err)
+				return err
 			}
-			if len(matches) == 1 {
-				fmt.Fprintln(d.Stdout, matches[0].Dir)
-				return nil
-			}
-
-			// 2. Exact directory basename match
-			matches = nil
-			for _, e := range entries {
-				if filepath.Base(e.Dir) == name {
-					matches = append(matches, e)
-				}
-			}
-			if len(matches) == 1 {
-				fmt.Fprintln(d.Stdout, matches[0].Dir)
-				return nil
-			}
-
-			// 3. Exact relative path match (relative to project root)
-			matches = nil
-			for _, e := range entries {
-				rel, err := filepath.Rel(root, e.Dir)
-				if err == nil && rel == name {
-					matches = append(matches, e)
-				}
-			}
-			if len(matches) == 1 {
-				fmt.Fprintln(d.Stdout, matches[0].Dir)
-				return nil
-			}
-
-			// 4. Substring match on branch name
-			matches = nil
-			for _, e := range entries {
-				if strings.Contains(e.Branch, name) {
-					matches = append(matches, e)
-				}
-			}
-			if len(matches) == 1 {
-				fmt.Fprintln(d.Stdout, matches[0].Dir)
-				return nil
-			}
-
-			if len(matches) == 0 {
-				fmt.Fprintf(d.Stderr, "No worktree found matching %q\n", name)
-				return fmt.Errorf("no worktree found matching %q", name)
-			}
-
-			fmt.Fprintf(d.Stderr, "Multiple worktrees match %q:\n", name)
-			for _, m := range matches {
-				fmt.Fprintf(d.Stderr, "  %s → %s\n", m.Branch, m.Dir)
-			}
-			return fmt.Errorf("multiple worktrees match %q", name)
+			fmt.Fprintln(d.Stdout, entry.Dir)
+			return nil
 		},
 	}
 }
