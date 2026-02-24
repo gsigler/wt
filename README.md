@@ -4,10 +4,18 @@ CLI for managing git worktrees in a bare repo setup. Automates cloning, worktree
 
 ## Install
 
+Requires Go 1.21+.
+
 ```sh
 git clone <this-repo> && cd wt
-npm install
-npm link
+make install
+```
+
+Or build manually:
+
+```sh
+go build -o wt .
+# move the binary somewhere on your PATH
 ```
 
 ## Quick Start
