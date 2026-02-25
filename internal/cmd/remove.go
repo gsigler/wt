@@ -8,15 +8,25 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// resolveWorktreeFromDir finds the worktree that contains dir (either an exact
+// match or a parent of dir).
+func resolveWorktreeFromDir(dir string, entries []WorktreeEntry) (*WorktreeEntry, error) {
+	for _, e := range entries {
+		if dir == e.Dir || strings.HasPrefix(dir, e.Dir+string(filepath.Separator)) {
+			return &e, nil
+		}
+	}
+	return nil, fmt.Errorf("current directory is not inside a worktree")
+}
+
 func RemoveCmd(d *Deps) *cobra.Command {
 	var force bool
 	cmd := &cobra.Command{
-		Use:   "remove <name>",
+		Use:   "remove [name]",
 		Short: "Remove a worktree and optionally delete the branch",
-		Args:  cobra.ExactArgs(1),
+		Long:  "Remove a worktree and optionally delete the branch.\nIf no name is given, removes the worktree for the current directory.",
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			name := args[0]
-
 			root, _, err := d.Config.LoadConfig()
 			if err != nil {
 				return err
@@ -28,9 +38,23 @@ func RemoveCmd(d *Deps) *cobra.Command {
 				return err
 			}
 			entries := ParseWorktreeList(output)
-			entry, err := ResolveWorktree(name, root, entries)
-			if err != nil {
-				return err
+
+			var entry *WorktreeEntry
+			if len(args) == 1 {
+				entry, err = ResolveWorktree(args[0], root, entries)
+				if err != nil {
+					return err
+				}
+			} else {
+				// No arg: detect current worktree from cwd
+				cwd, err := d.Getwd()
+				if err != nil {
+					return fmt.Errorf("could not determine current directory: %w", err)
+				}
+				entry, err = resolveWorktreeFromDir(cwd, entries)
+				if err != nil {
+					return err
+				}
 			}
 
 			worktreePath := entry.Dir

@@ -34,6 +34,7 @@ type Deps struct {
 	Prompt Prompter
 	Stdout io.Writer
 	Stderr io.Writer
+	Getwd  func() (string, error)
 }
 
 // DefaultDeps returns Deps wired to real implementations.
@@ -44,6 +45,7 @@ func DefaultDeps() *Deps {
 		Prompt: &RealPrompter{Scanner: bufio.NewScanner(os.Stdin), Out: os.Stdout},
 		Stdout: os.Stdout,
 		Stderr: os.Stderr,
+		Getwd:  os.Getwd,
 	}
 }
 

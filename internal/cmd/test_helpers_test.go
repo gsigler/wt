@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"fmt"
 
 	"github.com/gradyholmes/wt/internal/config"
 	"github.com/gradyholmes/wt/internal/git"
@@ -67,5 +68,6 @@ func testDeps(mg *MockGit, mc *MockConfig, mp *MockPrompter) (*Deps, *bytes.Buff
 		Prompt: mp,
 		Stdout: stdout,
 		Stderr: stderr,
+		Getwd:  func() (string, error) { return "", fmt.Errorf("Getwd not set") },
 	}, stdout, stderr
 }

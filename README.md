@@ -37,8 +37,8 @@ wt cd feature-branch
 # List worktrees
 wt list
 
-# Remove a worktree
-wt remove feature-branch
+# Remove the current worktree (or specify a name)
+wt remove
 ```
 
 ## Project Layout
@@ -101,9 +101,9 @@ Requires the shell wrapper — see [Shell Integration](#shell-integration) below
 
 Lists all worktrees.
 
-### `wt remove <branch> [--force]`
+### `wt remove [name] [--force]`
 
-Removes the worktree and optionally deletes the branch. Use `--force` for dirty worktrees.
+Removes a worktree and optionally deletes the branch. If no name is given, removes the worktree for the current directory. Use `--force` for dirty worktrees.
 
 ### `wt prune [--dry-run]`
 

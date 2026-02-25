@@ -16,6 +16,13 @@ const shellFunction = `wt() {
     else
       return 1
     fi
+  elif [ "$1" = "remove" ]; then
+    command wt "$@" || return $?
+    local dir
+    dir="$(command wt cd 2>/dev/null)"
+    if [ $? -eq 0 ] && [ -n "$dir" ]; then
+      cd "$dir"
+    fi
   elif [ "$1" = "create" ] || [ "$1" = "pr" ]; then
     local name="$2"
     command wt "$@" || return $?

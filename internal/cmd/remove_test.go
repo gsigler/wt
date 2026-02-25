@@ -268,6 +268,97 @@ func TestRemoveCmd(t *testing.T) {
 		}
 	})
 
+	t.Run("removes current worktree when no args given", func(t *testing.T) {
+		root := t.TempDir()
+		wtPath := filepath.Join(root, "my-branch")
+		mg := &MockGit{
+			GitInBareFunc: func(args, projectRoot string) (string, error) {
+				if args == "worktree list" {
+					return worktreeListOutput(root, wtPath+" def5678 [my-branch]"), nil
+				}
+				return "", nil
+			},
+		}
+		mc := &MockConfig{Root: root, Cfg: &config.Config{}}
+		mp := &MockPrompter{Answers: []string{"n"}}
+		d, stdout, _ := testDeps(mg, mc, mp)
+		d.Getwd = func() (string, error) { return wtPath, nil }
+
+		cmd := RemoveCmd(d)
+		cmd.SilenceUsage = true
+		cmd.SetArgs([]string{})
+		if err := cmd.Execute(); err != nil {
+			t.Fatal(err)
+		}
+
+		if len(mg.Calls) != 2 {
+			t.Fatalf("expected 2 git calls, got %d: %v", len(mg.Calls), mg.Calls)
+		}
+		if !strings.Contains(mg.Calls[1], "worktree remove") {
+			t.Errorf("second call = %q, want worktree remove", mg.Calls[1])
+		}
+		if !strings.Contains(stdout.String(), "my-branch") {
+			t.Errorf("stdout = %q, should mention branch name", stdout.String())
+		}
+	})
+
+	t.Run("detects worktree from subdirectory", func(t *testing.T) {
+		root := t.TempDir()
+		wtPath := filepath.Join(root, "my-branch")
+		mg := &MockGit{
+			GitInBareFunc: func(args, projectRoot string) (string, error) {
+				if args == "worktree list" {
+					return worktreeListOutput(root, wtPath+" def5678 [my-branch]"), nil
+				}
+				return "", nil
+			},
+		}
+		mc := &MockConfig{Root: root, Cfg: &config.Config{}}
+		mp := &MockPrompter{Answers: []string{"n"}}
+		d, _, _ := testDeps(mg, mc, mp)
+		d.Getwd = func() (string, error) { return filepath.Join(wtPath, "src", "pkg"), nil }
+
+		cmd := RemoveCmd(d)
+		cmd.SilenceUsage = true
+		cmd.SetArgs([]string{})
+		if err := cmd.Execute(); err != nil {
+			t.Fatal(err)
+		}
+
+		if !strings.Contains(mg.Calls[1], wtPath) {
+			t.Errorf("worktree remove call = %q, want path containing %s", mg.Calls[1], wtPath)
+		}
+	})
+
+	t.Run("errors when not inside a worktree and no args", func(t *testing.T) {
+		root := t.TempDir()
+		wtPath := filepath.Join(root, "my-branch")
+		mg := &MockGit{
+			GitInBareFunc: func(args, projectRoot string) (string, error) {
+				if args == "worktree list" {
+					return worktreeListOutput(root, wtPath+" def5678 [my-branch]"), nil
+				}
+				return "", nil
+			},
+		}
+		mc := &MockConfig{Root: root, Cfg: &config.Config{}}
+		mp := &MockPrompter{Answers: []string{}}
+		d, _, _ := testDeps(mg, mc, mp)
+		d.Getwd = func() (string, error) { return "/some/other/path", nil }
+
+		cmd := RemoveCmd(d)
+		cmd.SilenceErrors = true
+		cmd.SilenceUsage = true
+		cmd.SetArgs([]string{})
+		err := cmd.Execute()
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		if !strings.Contains(err.Error(), "not inside a worktree") {
+			t.Errorf("error = %q, want 'not inside a worktree'", err)
+		}
+	})
+
 	t.Run("resolves PR worktree by branch name", func(t *testing.T) {
 		root := t.TempDir()
 		prPath := filepath.Join(root, "prs", "2055")
